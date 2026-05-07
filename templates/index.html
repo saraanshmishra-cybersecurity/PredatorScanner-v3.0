@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PredatorScanner v3.0</title>
+    <style>
+        :root { --neon-green: #0f0; --neon-red: #f00; --dark-bg: #050505; --panel-bg: #0a0a0a; --grey-border: #333; }
+        body { background-color: var(--dark-bg); color: white; font-family: 'Courier New', Courier, monospace; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* SIDEBAR */
+        .sidebar { width: 350px; background: var(--panel-bg); border-right: 1px solid var(--grey-border); padding: 20px; overflow-y: auto; }
+        .history-item { background: #111; border-left: 4px solid #444; padding: 15px; margin-bottom: 15px; font-size: 0.9em; }
+        .history-item.vulnerable { border-left-color: var(--neon-red); }
+        .history-item.secure { border-left-color: var(--neon-green); }
+        .btn-small { background: transparent; border: 1px solid #555; color: white; cursor: pointer; padding: 5px 10px; margin-top: 10px; }
+
+        /* MAIN VIEW */
+        .main-view { flex-grow: 1; overflow-y: auto; padding: 40px; }
+        .container { width: 95%; max-width: 1300px; margin: auto; background: rgba(0,0,0,0.9); border: 1px solid var(--grey-border); padding: 50px; box-shadow: 0 0 40px rgba(0,255,0,0.05); }
+        
+        .header { display: flex; align-items: center; border-bottom: 2px solid var(--neon-green); margin-bottom: 40px; padding-bottom: 20px; }
+        .logo { width: 50px; height: 50px; margin-right: 20px; filter: drop-shadow(0 0 5px var(--neon-green)); }
+        
+        input[type="text"] { width: 65%; padding: 18px; background: #000; border: 1px solid var(--neon-green); color: var(--neon-green); font-size: 1.1em; outline: none; }
+        .btn-execute { padding: 18px 35px; background: var(--neon-green); color: black; border: none; font-weight: bold; cursor: pointer; font-size: 1.1em; text-transform: uppercase; }
+
+        /* RESULTS BOX */
+        .result-box { padding: 30px; margin: 40px 0; border: 2px solid; }
+        .secure-box { color: var(--neon-green); border-color: var(--neon-green); text-align: center; }
+        .vuln-box { color: var(--neon-red); border-color: var(--neon-red); }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; table-layout: fixed; }
+        th, td { border: 1px solid var(--grey-border); padding: 15px; text-align: left; word-break: keep-all; overflow: hidden; }
+        th { background: #111; color: var(--neon-green); text-transform: uppercase; }
+
+        .risk-Critical { color: #ff00ff; font-weight: bold; }
+        .risk-High { color: var(--neon-red); }
+        .risk-Medium { color: #ffa500; }
+
+        .footer { margin-top: 60px; padding-top: 30px; border-top: 1px solid var(--grey-border); text-align: center; }
+        .footer p { margin: 10px 0; font-weight: bold; font-size: 1.15em; color: #aaa; }
+        .footer p b { color: #fff; font-size: 1.25em; text-transform: uppercase; }
+
+        #loader { display: none; margin: 20px auto; border: 4px solid #222; border-top: 4px solid var(--neon-green); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* --- CRITICAL: PROFESSIONAL PDF REPORT STYLING --- */
+        @media print { 
+            .no-print { display: none !important; } 
+            .sidebar { display: none !important; } 
+            body { background: white !important; color: black !important; display: block !important; } 
+            .main-view { padding: 0 !important; overflow: visible !important; } 
+            .container { width: 100% !important; max-width: 100% !important; border: none !important; box-shadow: none !important; background: white !important; padding: 10px !important; }
+            .header { border-bottom: 2px solid black !important; color: black !important; }
+            .logo { filter: none !important; -webkit-print-color-adjust: exact; }
+            h1 { color: black !important; }
+            .result-box { border: 2px solid black !important; color: black !important; background: white !important; page-break-inside: avoid; }
+            h2, h3 { color: black !important; }
+            table { border: 1px solid black !important; table-layout: auto !important; width: 100% !important; }
+            th { background: #f0f0f0 !important; color: black !important; border: 1px solid black !important; font-size: 10pt; }
+            td { border: 1px solid black !important; color: black !important; font-size: 9pt; word-break: break-word !important; }
+            .risk-Critical, .risk-High, .risk-Medium { color: black !important; font-weight: bold !important; text-decoration: underline; }
+            .footer { border-top: 1px solid black !important; color: black !important; }
+            .footer p b { color: black !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar no-print">
+    <h2 style="color: var(--neon-green); font-size: 1.1em; text-transform: uppercase; margin-bottom: 25px;">Scan History</h2>
+    {% for item in history %}
+    <div class="history-item {{ item.status }}">
+        <b style="word-break: break-all;">{{ item.url }}</b><br>
+        <small style="color: #666;">{{ item.timestamp }} | Found: {{ item.count }}</small><br>
+        <a href="/?rescan={{ item.url }}"><button class="btn-small">RE-SCAN</button></a>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="main-view">
+    <div class="container">
+        <div class="header">
+            <img src="https://cdn-icons-png.flaticon.com/512/2092/2092663.png" class="logo" alt="PredatorScanner Logo">
+            <h1 style="letter-spacing: 2px;">PredatorScanner v3.0</h1>
+        </div>
+
+        <form method="POST" class="no-print" onsubmit="document.getElementById('loader').style.display='block';">
+            <div style="text-align: center;">
+                <input type="text" name="url" value="{{ url_val }}" placeholder="Enter URL here" required>
+                <button type="submit" class="btn-execute">EXECUTE SCAN</button>
+            </div>
+        </form>
+
+        <div id="loader"></div>
+
+        {% if report %}
+            <div class="result-box {{ 'secure-box' if report.status == 'secure' else 'vuln-box' }}">
+                <h3 style="color: #aaa; margin-top: 0;">AUDIT TARGET: {{ report.url }}</h3>
+                <h2 style="text-transform: uppercase;">{{ '[+] TARGET SECURE' if report.status == 'secure' else '[!] THREATS DETECTED' }}</h2>
+                
+                {% if report.vulnerabilities %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 20%;">FINDING TYPE</th>
+                            <th style="width: 20%;">PAYLOAD</th>
+                            <th style="width: 10%;">RISK</th>
+                            <th style="width: 20%;">HEURISTIC LOCATION</th>
+                            <th style="width: 30%;">IMPACT</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in report.vulnerabilities %}
+                        <tr>
+                            <td style="font-weight: bold;">{{ v.type }}</td>
+                            <td><code>{{ v.payload }}</code></td>
+                            <td class="risk-{{ v.risk }}">{{ v.risk }}</td>
+                            <td>{{ v.location }}</td>
+                            <td>{{ v.impact }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+            <div style="text-align: right;" class="no-print">
+                <button class="btn-execute" onclick="window.print()" style="background: white;">Download Report</button>
+            </div>
+        {% endif %}
+
+        <div class="footer">
+            <p><b>DEVELOPER: SARAANSH MISHRA | DELTAWARE SOLUTIONS INTERNSHIP PROJECT</b></p>
+            <p>Scan Timestamp: {{ report.timestamp if report else datetime.datetime.now().strftime("%Y-%m-%d %H:%M") }}</p>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
